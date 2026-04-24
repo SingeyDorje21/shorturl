@@ -1,0 +1,9 @@
+FROM python:3.13-slim AS base
+
+WORKDIR /app
+
+# Install curl for healthchecks
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+
+# Copy shared library first (changes less often → better layer caching)
+COPY shared/ ./shared/

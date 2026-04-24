@@ -1,0 +1,105 @@
+version: "3.9"
+
+# ---------------------------------------------------------------------------
+# Shared volume so all services read/write the same SQLite file.
+# In production swap DATABASE_URL for postgresql+asyncpg://... and remove
+# the sqlite_data volume — each service connects to the same Postgres DB.
+# ---------------------------------------------------------------------------
+
+volumes:
+  sqlite_data:
+
+services:
+
+  # --------------------------------------------------------------------------
+  # Shortener — handles POST /shorten and GET /{code}/info
+  # --------------------------------------------------------------------------
+  shortener:
+    build:
+      context: .
+      dockerfile: shortener/Dockerfile
+    environment:
+      DATABASE_URL: sqlite+aiosqlite:////data/shorturl.db
+      DEBUG: "false"
+      ENVIRONMENT: production
+    volumes:
+      - sqlite_data:/data
+    ports:
+      - "8001:8001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  # --------------------------------------------------------------------------
+  # Redirect — hot-path GET /{code} → 307 redirect
+  # --------------------------------------------------------------------------
+  redirect:
+    build:
+      context: .
+      dockerfile: redirect/Dockerfile
+    environment:
+      DATABASE_URL: sqlite+aiosqlite:////data/shorturl.db
+      DEBUG: "false"
+      ENVIRONMENT: production
+    volumes:
+      - sqlite_data:/data
+    ports:
+      - "8002:8002"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  # --------------------------------------------------------------------------
+  # Cleanup — background worker, purges expired URLs every hour
+  # --------------------------------------------------------------------------
+  cleanup:
+    build:
+      context: .
+      dockerfile: cleanup/Dockerfile
+    environment:
+      DATABASE_URL: sqlite+aiosqlite:////data/shorturl.db
+      DEBUG: "false"
+      ENVIRONMENT: production
+      CLEANUP_INTERVAL_SECONDS: "3600"
+    volumes:
+      - sqlite_data:/data
+    ports:
+      - "8003:8003"
+    depends_on:
+      shortener:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # --------------------------------------------------------------------------
+  # Gateway — public entry point on port 8000, proxies to the services above
+  # --------------------------------------------------------------------------
+  gateway:
+    build:
+      context: .
+      dockerfile: gateway/Dockerfile
+    environment:
+      SHORTENER_BASE_URL: http://shortener:8001
+      REDIRECT_BASE_URL: http://redirect:8002
+      CORS_ORIGINS: "*"
+      DEBUG: "false"
+      ENVIRONMENT: production
+    ports:
+      - "8000:8000"
+    depends_on:
+      shortener:
+        condition: service_healthy
+      redirect:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
