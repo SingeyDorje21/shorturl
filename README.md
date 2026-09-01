@@ -2,31 +2,8 @@
 
 A production-grade URL shortener split into four focused services.
 
-```
-┌──────────────────────────────────────────────────────────┐
-│                   Public Internet                        │
-└───────────────────────┬──────────────────────────────────┘
-                        │ :8000
-              ┌─────────▼─────────┐
-              │   API Gateway     │  CORS · routing · proxy
-              └────┬─────────┬────┘
-                   │         │
-          :8001    │         │ :8002
-    ┌──────────────▼──┐  ┌───▼──────────────┐
-    │  Shortener Svc  │  │  Redirect Svc    │
-    │  POST /shorten  │  │  GET /{code}     │
-    │  GET /{code}/info│  │  (hot path)      │
-    └──────────────┬──┘  └───┬──────────────┘
-                   │         │
-              ┌────▼─────────▼────┐
-              │   Shared SQLite   │  (swap for Postgres in prod)
-              └─────────┬─────────┘
-                        │
-              ┌─────────▼─────────┐
-              │   Cleanup Svc     │  :8003
-              │  background task  │  deletes expired URLs hourly
-              └───────────────────┘
-```
+<img width="640" height="383" alt="image" src="https://github.com/user-attachments/assets/d3d15fe0-2dbb-46c2-861b-0846bfbec34c" />
+
 
 ## Services
 
